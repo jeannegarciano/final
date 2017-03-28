@@ -9,8 +9,6 @@ import android.util.Log;
 
 import com.thesis.velma.helper.DBInfo.DataInfo;
 
-import java.util.StringTokenizer;
-
 import static com.thesis.velma.LandingActivity.db;
 
 /**
@@ -59,7 +57,7 @@ public class DataBaseHandler extends SQLiteOpenHelper {
 
     public void saveEvent(String userid, Long eventid, String eventname, String eventDescription, String eventLocation,
                           String eventStartDate, String eventStartTime, String eventEndDate, String eventEndTime, String notify, String invitedfirends,
-                           String userEmail, String lat, String lng) {
+                          String userEmail, String lat, String lng) {
 
         SQLiteDatabase sql = this.getWritableDatabase();
 
@@ -135,26 +133,40 @@ public class DataBaseHandler extends SQLiteOpenHelper {
             db.close();
         }
     }
-    public Cursor getids(){
+
+    public Cursor getids() {
 
         SQLiteDatabase sql = db.getReadableDatabase();
         Cursor c = sql.rawQuery("SELECT * FROM " + DataInfo.TBl_Events, null);
 
         return c;
     }
-public Cursor getid(String eId){
 
-    SQLiteDatabase sql = db.getReadableDatabase();
-    Cursor c = sql.rawQuery("SELECT _id FROM " + DataInfo.TBl_Events+
-            " WHERE EventID = '"+eId+"'", null);
+    public Cursor getid(String eId) {
 
-    return c;
-}
-    public void deleteInvite(long eId)
-    {
+        SQLiteDatabase sql = db.getReadableDatabase();
+        Cursor c = sql.rawQuery("SELECT _id FROM " + DataInfo.TBl_Events +
+                " WHERE EventID = '" + eId + "'", null);
+
+        return c;
+    }
+
+    public void deleteInvite(long eId) {
         SQLiteDatabase db = this.getWritableDatabase();
         try {
             db.delete(DataInfo.TBl_Events, "EventID =" + eId, null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            db.close();
+        }
+    }
+
+    public void deleteContacts() {
+
+        SQLiteDatabase db = this.getWritableDatabase();
+        try {
+            db.delete(DataInfo.TBlContacts, null, null);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
@@ -167,16 +179,16 @@ public Cursor getid(String eId){
 
         SQLiteDatabase sql = db.getReadableDatabase();
 
-    Cursor c = sql.rawQuery("SELECT _id, EventName, EventDescription,StartDate, StartTime, EndTime, EndDate  FROM " + DataInfo.TBl_Events+
-        " WHERE ((StartTime BETWEEN '"+st+"' AND '"+et+
-                "' ) AND ((StartDate BETWEEN '"+sd+"' AND '"+ed+
-                "') OR (EndDate BETWEEN '"+sd+"' AND '"+ed+"') OR ('"+sd+
-                "' BETWEEN StartDate AND EndDate))) OR ((EndTime BETWEEN '"+st+
-                "' AND '"+et+"') AND ((StartDate BETWEEN '"+sd+"' AND '"+ed+
-                "') OR (EndDate BETWEEN '"+sd+"' AND '"+ed+"') OR ('"+sd+
-                "' BETWEEN StartDate AND EndDate))) OR (('"+st+
-                "' BETWEEN StartTime AND EndTime) AND ((StartDate BETWEEN '"+sd+"' AND '"+ed+
-                "') OR (EndDate BETWEEN '"+sd+"' AND '"+ed+"') OR ('"+sd+
+        Cursor c = sql.rawQuery("SELECT _id, EventName, EventDescription,StartDate, StartTime, EndTime, EndDate  FROM " + DataInfo.TBl_Events +
+                " WHERE ((StartTime BETWEEN '" + st + "' AND '" + et +
+                "' ) AND ((StartDate BETWEEN '" + sd + "' AND '" + ed +
+                "') OR (EndDate BETWEEN '" + sd + "' AND '" + ed + "') OR ('" + sd +
+                "' BETWEEN StartDate AND EndDate))) OR ((EndTime BETWEEN '" + st +
+                "' AND '" + et + "') AND ((StartDate BETWEEN '" + sd + "' AND '" + ed +
+                "') OR (EndDate BETWEEN '" + sd + "' AND '" + ed + "') OR ('" + sd +
+                "' BETWEEN StartDate AND EndDate))) OR (('" + st +
+                "' BETWEEN StartTime AND EndTime) AND ((StartDate BETWEEN '" + sd + "' AND '" + ed +
+                "') OR (EndDate BETWEEN '" + sd + "' AND '" + ed + "') OR ('" + sd +
                 "' BETWEEN StartDate AND EndDate)))", null);
 
         return c;
@@ -251,7 +263,7 @@ public Cursor getid(String eId){
 
         SQLiteDatabase sql = db.getReadableDatabase();
 
-        Cursor c = sql.rawQuery("SELECT * FROM " + DataInfo.TBl_Events + " WHERE (StartDate = '"+sd+"' AND EndTime <= '"+st+
+        Cursor c = sql.rawQuery("SELECT * FROM " + DataInfo.TBl_Events + " WHERE (StartDate = '" + sd + "' AND EndTime <= '" + st +
                 "') ORDER BY StartTime DESC LIMIT 1", null);
 
         return c;
@@ -260,61 +272,60 @@ public Cursor getid(String eId){
     public Cursor compareLocationB(String sd, String et) {
         SQLiteDatabase sql = db.getReadableDatabase();
 
-        Cursor c = sql.rawQuery("SELECT * FROM " + DataInfo.TBl_Events + " WHERE (StartDate = '"+sd+"' AND StartTime >= '"+et+
+        Cursor c = sql.rawQuery("SELECT * FROM " + DataInfo.TBl_Events + " WHERE (StartDate = '" + sd + "' AND StartTime >= '" + et +
                 "') ORDER BY StartTime ASC LIMIT 1", null);
 
         return c;
     }
 
-    public Cursor getEventNames(String sd, String ed,int i,int flag) {
+    public Cursor getEventNames(String sd, String ed, int i, int flag) {
 
         String minute1;
         String minute2;
-        if((flag%2)==0) {
+        if ((flag % 2) == 0) {
             minute1 = "00";
             minute2 = "30";
-        }else{
+        } else {
             minute1 = "30";
             minute2 = "00";
         }
 
-        String i2 =""+i;
-        if(i2.length()==1){
-            i2="0"+i2;
+        String i2 = "" + i;
+        if (i2.length() == 1) {
+            i2 = "0" + i2;
         }
         String temp2;
-        if((flag%2)==0) {
-            temp2 =""+(i);
-        }else{
-            temp2 =""+(i+1);
+        if ((flag % 2) == 0) {
+            temp2 = "" + (i);
+        } else {
+            temp2 = "" + (i + 1);
         }
 
-        if(temp2.length()==1){
-            temp2="0"+temp2;
+        if (temp2.length() == 1) {
+            temp2 = "0" + temp2;
         }
 
-        if(i == 23){
+        if (i == 23) {
             minute2 = "59";
-            temp2=""+i;
+            temp2 = "" + i;
         }
         Log.i("Event sd", sd);
         Log.i("Event ed", ed);
-        Log.i("Event st", i2+minute1);
-        Log.i("Event et", temp2+minute2);
+        Log.i("Event st", i2 + minute1);
+        Log.i("Event et", temp2 + minute2);
         SQLiteDatabase sql = db.getReadableDatabase();
 
-        Cursor c = sql.rawQuery("SELECT EventName FROM "+ DataInfo.TBl_Events+
-                " WHERE ((StartDate BETWEEN '"+sd+"' AND '"+ed+
-                "') OR (EndDate BETWEEN "+sd+" AND "+ed+
-                ")) AND (('"+i2+""+minute1+"' BETWEEN StartTime AND EndTime) OR('"+temp2+
-                ""+minute2+"' BETWEEN StartTime AND EndTime))", null);
+        Cursor c = sql.rawQuery("SELECT EventName FROM " + DataInfo.TBl_Events +
+                " WHERE ((StartDate BETWEEN '" + sd + "' AND '" + ed +
+                "') OR (EndDate BETWEEN " + sd + " AND " + ed +
+                ")) AND (('" + i2 + "" + minute1 + "' BETWEEN StartTime AND EndTime) OR('" + temp2 +
+                "" + minute2 + "' BETWEEN StartTime AND EndTime))", null);
 
         return c;
     }
 //                      (substr(StartDate,7)||substr(StartDate,4,2)||substr(StartDate,1,2))
 
-    public void deleteTable ()
-    {
+    public void deleteTable() {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(DataInfo.TBl_Events, null, null);
         db.close();
@@ -330,10 +341,9 @@ public Cursor getid(String eId){
         return c;
     }
 
-    public Cursor getMaxId()
-    {
+    public Cursor getMaxId() {
         SQLiteDatabase sql = db.getReadableDatabase();
-        Cursor c = sql.rawQuery("SELECT _id FROM " + DataInfo.TBl_Events +" ORDER BY _id DESC LIMIT 1", null);
+        Cursor c = sql.rawQuery("SELECT _id FROM " + DataInfo.TBl_Events + " ORDER BY _id DESC LIMIT 1", null);
 
 
         return c;

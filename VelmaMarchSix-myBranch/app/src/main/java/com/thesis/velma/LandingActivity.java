@@ -5,7 +5,6 @@ import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -13,6 +12,8 @@ import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
@@ -25,24 +26,41 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.github.tibolte.agendacalendarview.AgendaCalendarView;
 import com.github.tibolte.agendacalendarview.CalendarPickerController;
 import com.github.tibolte.agendacalendarview.models.BaseCalendarEvent;
 import com.github.tibolte.agendacalendarview.models.CalendarEvent;
 import com.github.tibolte.agendacalendarview.models.DayItem;
-import com.google.android.gms.appinvite.AppInvite;
+import com.google.android.gms.appindexing.Action;
+import com.google.android.gms.appindexing.AppIndex;
+import com.google.android.gms.appindexing.Thing;
+import com.google.android.gms.auth.api.Auth;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.auth.api.signin.GoogleSignInResult;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.plus.People;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.plus.Plus;
-import com.thesis.velma.apiclient.MyEvent;
+import com.google.api.services.people.v1.People;
+import com.google.api.services.people.v1.PeopleScopes;
+import com.google.api.services.people.v1.model.EmailAddress;
+import com.google.api.services.people.v1.model.ListConnectionsResponse;
+import com.google.api.services.people.v1.model.Name;
+import com.google.api.services.people.v1.model.Person;
+import com.google.api.services.people.v1.model.PhoneNumber;
 import com.thesis.velma.helper.CheckInternet;
 import com.thesis.velma.helper.DataBaseHandler;
 import com.thesis.velma.helper.NetworkUtil;
+import com.thesis.velma.helper.PeopleHelper;
+import com.thesis.velma.helper.progressDialog;
 
+import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -57,7 +75,10 @@ import retrofit.RetrofitError;
 import retrofit.client.Response;
 
 
-public class LandingActivity extends AppCompatActivity implements CalendarPickerController, GoogleApiClient.OnConnectionFailedListener, View.OnClickListener, GoogleApiClient.ConnectionCallbacks, ResultCallback<People.LoadPeopleResult> {
+public class LandingActivity extends AppCompatActivity implements CalendarPickerController, OnConnectionFailedListener, View.OnClickListener, ConnectionCallbacks {
+
+
+    //CalendarPickerController, GoogleApiClient.OnConnectionFailedListener, View.OnClickListener, GoogleApiClient.ConnectionCallbacks, ResultCallback<People.LoadPeopleResult> {
 
     //WeekView.EventClickListener, MonthLoader.MonthChangeListener, WeekView.EventLongPressListener, WeekView.EmptyViewLongPressListener
 
@@ -112,6 +133,8 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
     private List<EventsEntity> eventsEntityList;
 
     private boolean refreshOnClick = false;
+    private static final String TAG = "LandingActivity";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -150,7 +173,6 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
         LoadEvents();
 
 
-
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED &&
                 ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
@@ -165,24 +187,21 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
                     },
                     LOCATION_REQUEST);
         }
-        //7-2-20172:20
-        //7-2-20173:15
-//        SimpleDateFormat formatter = new SimpleDateFormat("ddMMyyyyHHmm");
-//        Date sdate = null, edate = null;
-//        try {
-//            sdate = formatter.parse("722017220");
-//            edate = formatter.parse("722017315");
-//        } catch (ParseException e) {
-//            // TODO Auto-generated catch block
-//            e.printStackTrace();
-//        }
-//        formatter = new SimpleDateFormat("yyyyMMddHHmmss");
-//
-//        Log.d("StarTime", formatter.format(sdate));
-//        Log.d("EndTime", formatter.format(edate));
 
-//        OkHttp.getInstance(mcontext).fetchEvents("0000", "a");
 
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestProfile()
+                .requestEmail()
+                .requestServerAuthCode(getString(R.string.client_id))
+                .requestScopes(Plus.SCOPE_PLUS_LOGIN, Plus.SCOPE_PLUS_PROFILE, new Scope(PeopleScopes.CONTACTS_READONLY), new Scope("https://www.googleapis.com/auth/plus.profile.emails.read"))
+                .requestScopes(new Scope("https://www.googleapis.com/auth/contacts.readonly"))
+                .build();
+
+        google_api_client = new GoogleApiClient.Builder(this)
+                .enableAutoManage(this, this)
+                .addApi(Auth.GOOGLE_SIGN_IN_API, gso)
+                .addApi(Plus.API)
+                .addApi(AppIndex.API).build();
 
 
     }
@@ -258,7 +277,7 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 
 
         } else {
-     //       Toast.makeText(getBaseContext(), "Location Failed", Toast.LENGTH_SHORT).show();
+            //       Toast.makeText(getBaseContext(), "Location Failed", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -297,6 +316,7 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 
         }
     }
+
     @Override
     public void onScrollToDate(Calendar calendar) {
         if (getSupportActionBar() != null) {
@@ -307,50 +327,40 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
     // endregion
 
 
-    private void buildNewGoogleApiClient() {
+    private void buidNewGoogleApiClient() {
 
-        google_api_client = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(Plus.API, Plus.PlusOptions.builder().build())
-                .addApi(AppInvite.API)
-                .enableAutoManage(this, this)
-                .addScope(Plus.SCOPE_PLUS_LOGIN)
-                .addScope(Plus.SCOPE_PLUS_PROFILE)
-                .build();
-    }
-
-
-    @Override
-    public void onConnected(Bundle arg0) {
-        is_signInBtn_clicked = false;
+        Intent signInIntent = Auth.GoogleSignInApi.getSignInIntent(google_api_client);
+        startActivityForResult(signInIntent, 0002);
 
     }
 
-    @Override
-    public void onConnectionSuspended(int arg0) {
-        google_api_client.connect();
 
-    }
+    private void handleSignInResult(GoogleSignInResult result) {
+        Log.d(TAG, "handleSignInResult:" + result.isSuccess());
+        if (result.isSuccess()) {
+            progressDialog.showDialog(mcontext, "Velma", "Signing In. Please wait...", false);
 
-    private void resolveSignInError() {
-        if (connection_result.hasResolution()) {
-            try {
-                is_intent_inprogress = true;
-                connection_result.startResolutionForResult(this, SIGN_IN_CODE);
-                Log.d("resolve error", "sign in error resolved");
-            } catch (IntentSender.SendIntentException e) {
-                is_intent_inprogress = false;
-                google_api_client.connect();
+            GoogleSignInAccount acct = result.getSignInAccount();
+            // Get account information
+            String mFullName = acct.getDisplayName();
+            String mEmail = acct.getEmail();
 
-            }
+            String[] topicname = mEmail.split("@");
+
+            Log.d("Topic", topicname[0] + "Velma");
+
+            new PeoplesAsync().execute(acct.getServerAuthCode());
+
+
+        } else {
+            progressDialog.hideDialog();
         }
+
     }
 
 
     @Override
-    public void onClick(View view)
-    {
+    public void onClick(View view) {
         if (view == fab) {
 
             int status = NetworkUtil.getConnectivityStatusString(mcontext);
@@ -381,64 +391,12 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 
                 if (status == 0) {
                     CheckInternet.showConnectionDialog(mcontext);
-                }else {
+                } else {
 
-//                    final ProgressDialog loading = android.app.ProgressDialog.show(this, "Fetching Events", "Please wait...", false, false);
-//
-//                    RestAdapter adapter = new RestAdapter.Builder()
-//                            .setEndpoint(ROOT_URL)
-//                            .build();
-//
-//                    ApiService apiService = adapter.create(ApiService.class);
-//                    apiService.getMyJSON(new Callback<List<EventsEntity>>() {
-//                        @Override
-//                        public void success(List<EventsEntity> eventsEntities, Response response) {
-//
-//                            loading.dismiss();
-//
-//                            eventsEntityList = eventsEntities;
-//
-//                            db.deleteTable();
-//
-//                            for (int i = 0; i < eventsEntityList.size(); i++) {
-//
-//                                int id = eventsEntityList.get(i).getId();
-//                                String userID = eventsEntityList.get(i).getUserID();
-//                                long eventID = eventsEntityList.get(i).getEventID();
-//                                String eventName = eventsEntityList.get(i).getEventName();
-//                                String eventDescription = eventsEntityList.get(i).getEventDescription();
-//                                String eventLocation = eventsEntityList.get(i).getEventLocation();
-//                                String startDate = eventsEntityList.get(i).getStartDate();
-//                                String startTime = eventsEntityList.get(i).getStartTime();
-//                                String endDate = eventsEntityList.get(i).getEndDate();
-//                                String endTime = eventsEntityList.get(i).getEndTime();
-//                                String invitedFriends = eventsEntityList.get(i).getInvitedFriends();
-//                                String extra1 = eventsEntityList.get(i).getExtra1();
-//                                String extra2 = eventsEntityList.get(i).getExtra2();
-//                                String extra3 = eventsEntityList.get(i).getExtra3();
-//                                String extra4 = eventsEntityList.get(i).getExtra4();
-//
-//
-//                                if (useremail.equals(extra2)) {
-//                                    Log.d("cathlyn:", userID);
-//
-//                                    db.saveEvent(userID, eventID, eventName, eventDescription, eventLocation, startDate, startTime, endDate, endTime, invitedFriends, extra1, useremail, extra3, extra4);
-//                                }
-//
-//                                onRestart();
-//
-//                            }
-//                        }
-//
-//                        @Override
-//                        public void failure(RetrofitError error) {
-//
-//                        }
-//                    });
 
                     refreshOnClick = true;
-                    if (refreshOnClick){
-                        final ProgressDialog loading = android.app.ProgressDialog.show(this,"Fetching Events","Please wait...",false,false);
+                    if (refreshOnClick) {
+                        final ProgressDialog loading = android.app.ProgressDialog.show(this, "Fetching Events", "Please wait...", false, false);
 
                         RestAdapter adapter = new RestAdapter.Builder()
                                 .setEndpoint(ROOT_URL)
@@ -500,12 +458,15 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
                 }
 
                 return true;
+
+            case R.id.action_sync:
+                buidNewGoogleApiClient();
+                return true;
             default:
                 return super.onOptionsItemSelected(item);
         }
 
     }
-
 
 
 //
@@ -518,13 +479,6 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 //        startActivity(i);
 //        finish();
 //    }
-
-
-
-
-    protected String getEventTitle(Calendar time) {
-        return String.format("Event of %02d:%02d %s/%d", time.get(Calendar.HOUR_OF_DAY), time.get(Calendar.MINUTE), time.get(Calendar.MONTH) + 1, time.get(Calendar.DAY_OF_MONTH));
-    }
 
 
     @Override
@@ -543,17 +497,11 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 
 
     @Override
-    public void onResult(@NonNull People.LoadPeopleResult loadPeopleResult) {
-
-    }
-
-    @Override
     protected void onActivityResult(int requestCode, int responseCode,
                                     Intent intent) {
 
 
-        if (requestCode == CREATE_EVENT)
-        {
+        if (requestCode == CREATE_EVENT) {
 //            MyEvent myevent = null;
 
             if (responseCode == RESULT_OK) {
@@ -568,6 +516,13 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 //
 //                mAgendaCalendarView.init(eventList, minDate, maxDate, Locale.getDefault(), this);
             }
+
+        }
+
+        if (requestCode == 0002) {
+            GoogleSignInResult result = Auth.GoogleSignInApi.getSignInResultFromIntent(intent);
+            handleSignInResult(result);
+
 
         }
 
@@ -623,4 +578,130 @@ public class LandingActivity extends AppCompatActivity implements CalendarPicker
 
         return eventList;
     }
+
+    //region THREADS
+
+    public class PeoplesAsync extends AsyncTask<String, Void, List<String>> {
+
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+        }
+
+        @Override
+        protected List<String> doInBackground(String... params) {
+
+            List<String> nameList = new ArrayList<>();
+
+            try {
+                People peopleService = PeopleHelper.setUp(LandingActivity.this, params[0]);
+
+                db.deleteContacts();
+
+                ListConnectionsResponse response = peopleService.people().connections()
+                        .list("people/me")
+                        // This line's really important! Here's why:
+                        // http://stackoverflow.com/questions/35604406/retrieving-information-about-a-contact-with-google-people-api-java
+                        .setRequestMaskIncludeField("person.names,person.emailAddresses,person.phoneNumbers")
+                        .execute();
+                List<Person> connections = response.getConnections();
+
+                for (Person person : connections) {
+                    if (!person.isEmpty()) {
+                        List<Name> names = person.getNames();
+                        List<EmailAddress> emailAddresses = person.getEmailAddresses();
+                        List<PhoneNumber> phoneNumbers = person.getPhoneNumbers();
+
+                        if (phoneNumbers != null)
+                            for (PhoneNumber phoneNumber : phoneNumbers)
+                                Log.d(TAG, "phone: " + phoneNumber.getValue());
+
+                        if (emailAddresses != null)
+                            for (EmailAddress emailAddress : emailAddresses) {
+                                Log.d(TAG, "email: " + emailAddress.getValue());
+                                db.saveContact("", emailAddress.getValue());
+                            }
+
+                        if (names != null)
+                            for (Name name : names)
+                                nameList.add(name.getDisplayName());
+
+                        progressDialog.hideDialog();
+//                        Intent intent = new Intent(mcontext, LandingActivity.class);
+//                        mcontext.startActivity(intent);
+//                        ((Activity) mcontext).finish();
+
+                    } else {
+                        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mcontext);
+                        prefs.edit().putBoolean("isLoggedIn", false).commit();
+                    }
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            return nameList;
+        }
+
+
+        @Override
+        protected void onPostExecute(List<String> nameList) {
+            super.onPostExecute(nameList);
+
+        }
+    }
+
+
+    //endregion
+
+    /**
+     * ATTENTION: This was auto-generated to implement the App Indexing API.
+     * See https://g.co/AppIndexing/AndroidStudio for more information.
+     */
+
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        google_api_client.connect();
+        AppIndex.AppIndexApi.start(google_api_client, getIndexApiAction());
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        AppIndex.AppIndexApi.end(google_api_client, getIndexApiAction());
+        google_api_client.disconnect();
+    }
+
+    public Action getIndexApiAction() {
+        Thing object = new Thing.Builder()
+                .setName("Login Page") // TODO: Define a title for the content shown.
+                // TODO: Make sure this auto-generated URL is correct.
+                .setUrl(Uri.parse("http://[ENTER-YOUR-URL-HERE]"))
+                .build();
+        return new Action.Builder(Action.TYPE_VIEW)
+                .setObject(object)
+                .setActionStatus(Action.STATUS_TYPE_COMPLETED)
+                .build();
+    }
+
+    @Override
+    public void onConnected(Bundle arg0) {
+
+    }
+
+
+    @Override
+    public void onConnectionSuspended(int arg0) {
+    }
+
+
 }

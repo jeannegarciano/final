@@ -13,4 +13,12 @@
         app:showAsAction="always" />
 
 
+    <item
+        android:id="@+id/action_sync"
+        android:icon="@android:drawable/stat_notify_sync"
+        android:orderInCategory="100"
+        android:title="Sync Contacts"
+        app:showAsAction="always" />
+
+
 </menu>
